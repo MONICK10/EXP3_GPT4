@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ex 3 · Intelligent Email Assistant · URK23CS1167</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>:root { --accent: #0284c7; --accent-soft: #e0f2fe; } #reply-box { min-height: 200px; }
+.mail { border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:#fafafa; font-size:14px; }
+.mail .h { color: var(--muted); font-size: 12.5px; margin-bottom: 6px; }</style>
+</head>
+<body>
+{% include "_header.html" %}
+<main class="layout">
+  <section>
+    <div class="card" id="card-input">
+      <h2>Customer Email <span class="module-tag">Input Module</span></h2>
+      <p class="hint">Paste an email or pick a sample. History: {{ n_history }} past emails ({{ method }}).</p>
+      <label for="sample">Load sample</label>
+      <select id="sample"><option value="">-- choose --</option>
+        {% for s in samples %}<option value="{{ loop.index0 }}">{{ s.subject }} ({{ s.name }})</option>{% endfor %}</select>
+      <label for="name">Customer Name</label><input id="name" placeholder="e.g. John">
+      <label for="subject">Subject</label><input id="subject" placeholder="e.g. Delivery Delay">
+      <label for="email">Email</label><textarea id="email" placeholder="Customer's email text"></textarea>
+      <button id="btn-process">Analyze &amp; Generate Reply</button>
+    </div>
+    <div class="card hidden" id="card-intent">
+      <h2>Intent Detection <span class="module-tag">Intent Module</span></h2><div class="out"></div>
+    </div>
+  </section>
+  <section>
+    <div class="card hidden" id="card-similar">
+      <h2>Similar Past Emails <span class="module-tag">Retrieval Module</span></h2>
+      <p class="hint">Top-3 past conversations by cosine similarity. Used as examples for the reply.</p>
+      <div class="out"></div>
+    </div>
+    <div class="card hidden" id="card-reply">
+      <h2>AI Reply <span class="module-tag">Reply Module</span> <span id="tone-badge" class="badge">Original</span></h2>
+      <textarea id="reply-box"></textarea>
+      <label>Improve tone <span class="module-tag">Tone Module</span></label>
+      <div class="btns">
+        {% for t in tones %}<button class="secondary tone" data-tone="{{ t }}">{{ t }}</button>{% endfor %}
+        <button id="btn-summary" class="ghost">Summarize Conversation</button>
+        <button id="btn-save">Save Reply</button>
+      </div>
+    </div>
+    <div class="card hidden" id="card-tone"><h2>Tone Improvement <span class="module-tag">Tone Module</span></h2><div class="out"></div></div>
+    <div class="card hidden" id="card-summary"><h2>Conversation Summary <span class="module-tag">Summary Module</span></h2><div class="out"></div></div>
+    <div class="card hidden" id="card-saved"><h2>Saved Reply <span class="module-tag">Save Module</span></h2><div class="out"></div></div>
+  </section>
+</main>
+<footer>Monick S · URK23CS1167 · Karunya Institute of Technology and Sciences</footer>
+<script src="/static/ui.js"></script>
+<script>
+const SAMPLES = {{ samples|tojson }};
+const S = { intent: null, similar: [], original: "", tone: "Original", summary: "" };
+const email = () => ({ name: $("#name").value, subject: $("#subject").value, email: $("#email").value });
+
+$("#sample").onchange = (e) => { const s = SAMPLES[e.target.value]; if (s) { $("#name").value = s.name; $("#subject").value = s.subject; $("#email").value = s.email; } };
+
+$("#btn-process").onclick = (e) => withLoading(e.target, async () => {
+  const i = await api("/api/intent", email()); S.intent = i;
+  const cls = { Positive: "pos", Negative: "neg", Neutral: "neu" }[i.sentiment] || "neu";
+  showCard("card-intent", `<div class="kv"><div>Intent</div><div><span class="badge">${esc(i.intent)}</span> <small>(${esc(i.source)})</small></div>
+    <div>Urgency</div><div>${esc(i.urgency)}</div><div>Sentiment</div><div><span class="badge ${cls}">${esc(i.sentiment)}</span></div>
+    <div>Reason</div><div>${esc(i.reason)}</div></div>`);
+
+  const r = await api("/api/retrieve", email()); S.similar = r.similar;
+  showCard("card-similar", r.similar.map((x, n) => `<div class="mail" style="margin-bottom:10px">
+    <div class="h">#${n + 1} · ${esc(x.subject)} · <span class="badge">${esc(x.intent)}</span> · similarity <b>${x.score}</b></div>
+    <div class="bar" style="margin-bottom:8px"><span style="width:${Math.max(0, x.score) * 100}%"></span></div>
+    <b>Customer:</b> ${esc(x.email)}<br><b>Our reply:</b> ${esc(x.reply)}</div>`).join(""));
+
+  const rep = await api("/api/reply", { ...email(), intent: i, similar: r.similar });
+  S.original = rep.reply; S.tone = "Original"; $("#tone-badge").textContent = "Original";
+  $("#reply-box").value = rep.reply; showCard("card-reply");
+});
+
+document.querySelectorAll(".tone").forEach((b) => b.onclick = (e) => withLoading(e.target, async () => {
+  const r = await api("/api/tone", { reply: S.original || $("#reply-box").value, tone: b.dataset.tone });
+  S.tone = r.tone; $("#tone-badge").textContent = r.tone; $("#reply-box").value = r.reply;
+  showCard("card-tone", `<div class="row"><div><b>Before (original)</b><div class="mail">${md(S.original)}</div></div>
+    <div><b>After (${esc(r.tone)})</b><div class="mail">${md(r.reply)}</div></div></div>`);
+}));
+
+$("#btn-summary").onclick = (e) => withLoading(e.target, async () => {
+  const r = await api("/api/summary", { ...email(), reply: $("#reply-box").value }); S.summary = r.summary;
+  showCard("card-summary", `<p>${esc(r.summary)}</p><small>${r.words} words</small>`);
+});
+
+$("#btn-save").onclick = (e) => withLoading(e.target, async () => {
+  const r = await api("/api/save", { ...email(), intent: S.intent?.intent, tone: S.tone, reply: $("#reply-box").value, summary: S.summary });
+  showCard("card-saved", `<div class="notice ok">✔ Reply saved successfully to <b>${esc(r.file)}</b></div>` +
+    table(r.history, [["timestamp", "Saved at"], ["customer_name", "Customer"], ["intent", "Intent"], ["tone", "Tone"]]));
+});
+</script>
+</body>
+</html>

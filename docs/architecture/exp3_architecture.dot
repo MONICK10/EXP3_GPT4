@@ -1,0 +1,18 @@
+digraph G {
+  graph [rankdir=TB, fontname="Helvetica", fontsize=11, nodesep=0.35, ranksep=0.42, pad=0.25, bgcolor="white", splines=spline];
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, fillcolor="#ffffff", color="#334155", penwidth=1.2, margin="0.18,0.07"];
+  edge [color="#475569", arrowsize=0.7, penwidth=1.1, fontname="Helvetica", fontsize=10];
+user [label="Support Agent", shape=oval, fillcolor="#e2e8f0"];
+llm [label="Ollama (Local LLM Server)\nLlama 3.2", shape=box3d, fillcolor="#fde68a"];
+
+ui [label="Web Interface (Flask + HTML/JS)", fillcolor="#e0f2fe"];
+inp [label="Input Module\nName, Subject, Email", fillcolor="#bae6fd"];
+intent [label="Intent Module\nIntent, Urgency, Sentiment"];
+ret [label="Retrieval Module\nEmbeddings + Cosine Top-3"]; hist [label="email_history.csv", shape=cylinder, fillcolor="#dbeafe"];
+reply [label="Reply Module\n(few-shot with similar emails)"];
+tone [label="Tone Module\nFriendly / Formal / Empathetic"]; sum [label="Summary Module\n50-word summary"];
+save [label="Save Module", fillcolor="#dcfce7"]; out [label="saved_replies.csv", shape=cylinder, fillcolor="#dbeafe"];
+user -> ui -> inp; inp -> intent; inp -> ret; hist -> ret; intent -> reply; ret -> reply; reply -> tone; reply -> sum;
+intent -> llm [style=dashed]; reply -> llm; tone -> llm; sum -> llm;
+tone -> save; sum -> save; save -> out;
+}
