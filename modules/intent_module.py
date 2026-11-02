@@ -33,6 +33,11 @@ def keyword_intent(text):
 def detect(e):
     prompt = (f"Classify this customer email.\nSubject: {e['subject']}\nEmail: {e['email']}\n\n"
               f"Intent must be one of: {', '.join(INTENTS)}.\n"
+              "Guidance:\n"
+              "- Refund Request: the customer is chasing money back, even if they already returned the item.\n"
+              "- Return/Exchange: the customer wants to START a return or swap, and has not asked about money.\n"
+              "- Sentiment is about how the customer feels. A complaint or a chase-up is Negative or Neutral, "
+              "never Positive. Only genuine praise is Positive.\n"
               'Return JSON: {"intent": "...", "urgency": "Low|Medium|High", '
               '"sentiment": "Positive|Neutral|Negative", "reason": "<one short sentence>"}')
     d = ask_json(prompt, default={}) or {}

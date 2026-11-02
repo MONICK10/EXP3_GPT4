@@ -55,6 +55,14 @@ const SAMPLES = {{ samples|tojson }};
 const S = { intent: null, similar: [], original: "", tone: "Original", summary: "" };
 const email = () => ({ name: $("#name").value, subject: $("#subject").value, email: $("#email").value });
 
+// grow the reply box to fit the whole email, so nothing is cut off in screenshots
+function setReply(text) {
+  const box = $("#reply-box");
+  box.value = text;
+  box.style.height = "auto";
+  box.style.height = (box.scrollHeight + 8) + "px";
+}
+
 $("#sample").onchange = (e) => { const s = SAMPLES[e.target.value]; if (s) { $("#name").value = s.name; $("#subject").value = s.subject; $("#email").value = s.email; } };
 
 $("#btn-process").onclick = (e) => withLoading(e.target, async () => {
@@ -72,12 +80,12 @@ $("#btn-process").onclick = (e) => withLoading(e.target, async () => {
 
   const rep = await api("/api/reply", { ...email(), intent: i, similar: r.similar });
   S.original = rep.reply; S.tone = "Original"; $("#tone-badge").textContent = "Original";
-  $("#reply-box").value = rep.reply; showCard("card-reply");
+  showCard("card-reply"); setReply(rep.reply);  // show first: a hidden box has scrollHeight 0
 });
 
 document.querySelectorAll(".tone").forEach((b) => b.onclick = (e) => withLoading(e.target, async () => {
   const r = await api("/api/tone", { reply: S.original || $("#reply-box").value, tone: b.dataset.tone });
-  S.tone = r.tone; $("#tone-badge").textContent = r.tone; $("#reply-box").value = r.reply;
+  S.tone = r.tone; $("#tone-badge").textContent = r.tone; setReply(r.reply);
   showCard("card-tone", `<div class="row"><div><b>Before (original)</b><div class="mail">${md(S.original)}</div></div>
     <div><b>After (${esc(r.tone)})</b><div class="mail">${md(r.reply)}</div></div></div>`);
 }));
